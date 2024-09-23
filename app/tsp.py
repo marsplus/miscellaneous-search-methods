@@ -9,7 +9,7 @@ class TSPState(State):
     def __init__(
         self,
         visited: List[int],
-        current_city: int,
+        city: int,
         dist: List[List[float]],
         num_city: int,
     ):
@@ -17,12 +17,12 @@ class TSPState(State):
         Initialize a Traveling Salesmen Problem (TSP).
         Args:
         - visited: list of cities visited in order.
-        - current_city: the city we are currently at.
+        - city: the city we are currently at.
         - dist: the distance matrix.
         - N: total number of cities.
         """
         self.visited = visited
-        self.current_city = current_city
+        self.city = city
         self.dist = dist
         self.N = num_city
 
@@ -63,7 +63,7 @@ class TSPState(State):
 
     def get_cost(self, state: State, action: int) -> float:
         if isinstance(state, TSPState):
-            return state.dist[state.current_city][action]
+            return state.dist[state.city][action]
         else:
             raise ValueError("The state passed to get_cost must be of type TSPState.")
 

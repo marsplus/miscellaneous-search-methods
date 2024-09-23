@@ -31,7 +31,7 @@ class State(ABC):
 
     @abstractmethod
     def get_cost(self, state: State, action: int) -> float:
-        """Return the cost of selecting `action` and `state`"""
+        """Return the cost of selecting `action` at `state`"""
         pass
 
     @abstractmethod
