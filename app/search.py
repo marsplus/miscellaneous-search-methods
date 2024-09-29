@@ -247,7 +247,7 @@ class MonteCarloTreeSearch(Search):
         root = MCTSNode(state=self.state)
         for _ in range(self.num_sim):
             node = self.tree_policy(root)
-            reward = self.default_policy(node)
+            reward = self.base_policy(node)
             self.backpropagate(node, reward)
         best_child = root.best_child(c_param=0)
         return best_child.action
@@ -260,7 +260,7 @@ class MonteCarloTreeSearch(Search):
                 node = node.best_child()
         return node
 
-    def default_policy(self, node: MCTSNode) -> float:
+    def base_policy(self, node: MCTSNode) -> float:
         current_state = node.state
         while not current_state.is_terminal():
             actions = current_state.get_actions()
