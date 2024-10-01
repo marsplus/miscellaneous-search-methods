@@ -9,13 +9,13 @@ from typing import Callable, List, Optional, Tuple
 from app.states import State
 
 
-def simulate_rollout(state: State, max_depth: int) -> float:
+def simulate_rollout(state: State, rollout_depth: int) -> float:
     """
     Perform a random rollout simulation starting from the given state.
 
     Args:
     - state: The initial state for the simulation.
-    - max_depth: the maximum depth to search
+    - rollout_depth: the maximum depth to rollout.
 
     Returns:
     - total_cost: The total cost accumulated during the simulation.
@@ -23,7 +23,7 @@ def simulate_rollout(state: State, max_depth: int) -> float:
     random.seed()
     current_state = state
     depth = 0
-    while not current_state.is_terminal() and depth < max_depth:
+    while not current_state.is_terminal() and depth < rollout_depth:
         actions = current_state.get_actions()
         if actions:
             action = random.choice(actions)
@@ -44,13 +44,17 @@ class Search(ABC):
         state: State,
         num_sim: int = 100,
         num_processes: Optional[int] = None,
-        max_depth: int = 20,
+        max_depth: int = 1,
+        rollout_depth: int = 5,
     ):
         """
         Initialize the search with a given state.
         Args:
         - state: The initial state of the problem (any state that inherits from State).
         - num_sim: the number of simulations to run
+        - num_processes: #processes to run rollout
+        - max_depth: max steps to look ahead
+        - rollout_depth: max depth to run rollout
         """
         self.state = state
         self.num_sim = num_sim
@@ -59,6 +63,7 @@ class Search(ABC):
         max_processes = max(1, cpu_count - 1)
         self.num_processes = min(self.num_processes, max_processes)
         self.max_depth = max_depth
+        self.rollout_depth = rollout_depth
 
     def update_state(self, state: State) -> None:
         """Update the current state with a new state."""
@@ -84,7 +89,7 @@ class Search(ABC):
         Returns:
         - avg_cost: The average total cost from the start state to the terminal states.
         """
-        args = [(state, self.max_depth) for _ in range(self.num_sim)]
+        args = [(state, self.rollout_depth) for _ in range(self.num_sim)]
         with multiprocessing.Pool(processes=self.num_processes) as pool:
             results = pool.starmap(simulate_rollout, args)
 
@@ -121,8 +126,8 @@ class TwoStepLookaheadWithRollout(Search):
             second_min_cost = float("inf")
             for second_action in next_state.get_actions():
                 second_state_cost = next_state.get_cost(next_state, second_action)
-                resulting_state = next_state.next_state(second_action)
-                future_cost_estimate = self.rollout(resulting_state)
+                next_next_state = next_state.next_state(second_action)
+                future_cost_estimate = self.rollout(next_next_state)
                 total_future_cost = second_state_cost + future_cost_estimate
 
                 if total_future_cost < second_min_cost:
@@ -155,8 +160,7 @@ class SelectiveDepthLookaheadWithRollout(Search):
         - max_depth: The maximum depth to look ahead.
         - should_expand_fn: Optional function to determine whether to expand a node.
         """
-        super().__init__(state, num_sim, num_processes)
-        self.max_depth = max_depth
+        super().__init__(state, num_sim, num_processes, max_depth)
         self.should_expand_fn = should_expand_fn
 
     def search(self) -> Optional[int]:
