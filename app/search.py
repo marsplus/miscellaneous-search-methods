@@ -9,25 +9,28 @@ from typing import Callable, List, Optional, Tuple
 from app.states import State
 
 
-def simulate_rollout(state: State) -> float:
+def simulate_rollout(state: State, max_depth: int) -> float:
     """
     Perform a random rollout simulation starting from the given state.
 
     Args:
     - state: The initial state for the simulation.
+    - max_depth: the maximum depth to search
 
     Returns:
     - total_cost: The total cost accumulated during the simulation.
     """
     random.seed()
     current_state = state
-    while not current_state.is_terminal():
+    depth = 0
+    while not current_state.is_terminal() and depth < max_depth:
         actions = current_state.get_actions()
         if actions:
             action = random.choice(actions)
             current_state = current_state.next_state(action)
         else:
             break
+        depth += 1
     return current_state.total_cost()
 
 
@@ -37,7 +40,11 @@ class Search(ABC):
     """
 
     def __init__(
-        self, state: State, num_sim: int = 100, num_processes: Optional[int] = None
+        self,
+        state: State,
+        num_sim: int = 100,
+        num_processes: Optional[int] = None,
+        max_depth: int = 20,
     ):
         """
         Initialize the search with a given state.
@@ -51,6 +58,7 @@ class Search(ABC):
         cpu_count = multiprocessing.cpu_count()
         max_processes = max(1, cpu_count - 1)
         self.num_processes = min(self.num_processes, max_processes)
+        self.max_depth = max_depth
 
     def update_state(self, state: State) -> None:
         """Update the current state with a new state."""
@@ -76,9 +84,9 @@ class Search(ABC):
         Returns:
         - avg_cost: The average total cost from the start state to the terminal states.
         """
-        args = [state] * self.num_sim
+        args = [(state, self.max_depth) for _ in range(self.num_sim)]
         with multiprocessing.Pool(processes=self.num_processes) as pool:
-            results = pool.map(simulate_rollout, args)
+            results = pool.starmap(simulate_rollout, args)
 
         avg_cost = sum(results) / len(results)
         return avg_cost
