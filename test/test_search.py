@@ -12,7 +12,7 @@ from app.search import (
 )
 from app.tsp import TSPState
 
-N = 5000
+N = 10000
 N_PROC = 20
 
 random.seed(42)
