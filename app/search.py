@@ -97,6 +97,44 @@ class Search(ABC):
         return avg_cost
 
 
+class ExhaustiveSearchDFS(Search):
+    def search(self) -> Optional[int]:
+        best_action, _ = self.dfs(self.state, 0, float("inf"))
+        return best_action
+
+    def dfs(
+        self, state: State, depth: int, min_cost: float
+    ) -> Tuple[Optional[int], float]:
+        """
+        Perform DFS to search for the best action.
+        Args:
+        - state: The current state.
+        - depth: The current depth of search.
+        - min_cost: The minimum cost found so far.
+
+        Returns:
+        - best_action: The best action found.
+        - min_cost: The minimum cost found.
+        """
+        if state.is_terminal():
+            return None, state.total_cost()
+
+        best_action = None
+        current_state = state.get_current_state()
+
+        for action in state.get_actions():
+            immediate_cost = state.get_cost(current_state, action)
+            next_state = state.next_state(action)
+            _, future_cost = self.dfs(next_state, depth + 1, min_cost)
+            total_cost = immediate_cost + future_cost
+
+            if total_cost < min_cost:
+                min_cost = total_cost
+                best_action = action
+
+        return best_action, min_cost
+
+
 class OneStepLookaheadWithRollout(Search):
     def search(self) -> Optional[int]:
         best_action = None
@@ -253,7 +291,6 @@ class MCTSNode:
 class MonteCarloTreeSearch(Search):
     def __init__(self, state: State, num_sim: int = 1000):
         super().__init__(state, num_sim)
-        self.num_sim = num_sim
 
     def search(self) -> Optional[int]:
         root = MCTSNode(state=self.state)

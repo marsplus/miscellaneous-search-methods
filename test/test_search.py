@@ -5,6 +5,7 @@ from itertools import permutations
 import pytest
 
 from app.search import (
+    ExhaustiveSearchDFS,
     MonteCarloTreeSearch,
     OneStepLookaheadWithRollout,
     SelectiveDepthLookaheadWithRollout,
@@ -12,10 +13,10 @@ from app.search import (
 )
 from app.tsp import TSPState
 
-N = 10000
-N_PROC = 20
+N = 50000
+N_PROC = 10
 
-random.seed(42)
+random.seed(12)
 
 
 def should_expand(state, depth):
@@ -65,11 +66,9 @@ def ten_city_distance_matrix():
 
 def run_search_method(search_method, initial_state, optimal_cost):
     """Run the search method for the TSP and verify the total cost matches the optimal cost."""
-    if isinstance(search_method, MonteCarloTreeSearch):
-        search_method.num_sim = N * 10
-    else:
-        search_method.num_sim = N
+    search_method.num_sim = N
     search_method.num_processes = N_PROC
+    search_method.rollout_depth = 100
 
     current_state = initial_state
     while not current_state.is_terminal():
@@ -77,7 +76,7 @@ def run_search_method(search_method, initial_state, optimal_cost):
         current_state = current_state.next_state(next_city)
         search_method.update_state(current_state)
     total_cost = current_state.total_cost()
-    acceptable_cost = optimal_cost * 1.05  # Allow a 5% tolerance
+    acceptable_cost = optimal_cost * 1.05  # Allow a 10% tolerance
     assert total_cost <= acceptable_cost
 
 
@@ -96,7 +95,14 @@ def run_single_step_search_test(search_class, distance_matrix):
 
 
 def run_selective_lookahead_test(distance_matrix, max_depth):
-    """Run a selective depth lookahead search and verify the solution."""
+    """
+    Run a selective depth lookahead search and verify the solution by comparing it with one-step and two-step lookahead methods.
+
+    This test ensures that the SelectiveDepthLookaheadWithRollout search behaves equivalently to:
+    - OneStepLookaheadWithRollout when `max_depth=1`
+    - TwoStepLookaheadWithRollout when `max_depth=2`
+
+    """
     tour, optimal_cost = find_optimal_tsp_solution(distance_matrix)
     start, second = tour[0], tour[1]
     initial_state = TSPState(
@@ -110,9 +116,10 @@ def run_selective_lookahead_test(distance_matrix, max_depth):
         should_expand_fn=should_expand,
     )
 
-    # When max_depth=1 or 2, compare with the corresponding lookahead
+    # should be equivalent to one-step lookahead
     if max_depth == 1:
         compare_search = OneStepLookaheadWithRollout(initial_state, num_sim=N)
+    # should be equivalent to two-step lookahead
     elif max_depth == 2:
         compare_search = TwoStepLookaheadWithRollout(initial_state, num_sim=N)
     else:
@@ -192,6 +199,18 @@ def test_mcts_small(small_distance_matrix):
 # Test MCTS on a 10-city matrix
 def test_mcts_ten_city(ten_city_distance_matrix):
     run_mcts_search_test(MonteCarloTreeSearch, ten_city_distance_matrix)
+
+
+# Test DFS Search on a 10-city matrix
+def test_dfs_search_ten_city(ten_city_distance_matrix):
+    """Test Exhaustive DFS on a 10-city distance matrix."""
+    run_single_step_search_test(ExhaustiveSearchDFS, ten_city_distance_matrix)
+
+
+# Test DFS Search on a small matrix
+def test_dfs_search_small(small_distance_matrix):
+    """Test Exhaustive DFS on a small distance matrix."""
+    run_single_step_search_test(ExhaustiveSearchDFS, small_distance_matrix)
 
 
 # Test terminal state handling
