@@ -20,7 +20,7 @@ def simulate_rollout(state: State, rollout_depth: int) -> float:
     Returns:
     - total_cost: The total cost accumulated during the simulation.
     """
-    random.seed()
+    # random.seed()
     current_state = state
     depth = 0
     while not current_state.is_terminal() and depth < rollout_depth:
@@ -44,8 +44,8 @@ class Search(ABC):
         state: State,
         num_sim: int = 100,
         num_processes: Optional[int] = None,
-        max_depth: int = 1,
-        rollout_depth: int = 5,
+        max_depth: int = 9999999,
+        rollout_depth: int = 9999999,
     ):
         """
         Initialize the search with a given state.
@@ -119,6 +119,9 @@ class ExhaustiveSearchDFS(Search):
         if state.is_terminal():
             return None, state.total_cost()
 
+        if depth >= self.max_depth:
+            return None, state.total_cost()
+
         best_action = None
         current_state = state.get_current_state()
 
@@ -133,6 +136,57 @@ class ExhaustiveSearchDFS(Search):
                 best_action = action
 
         return best_action, min_cost
+
+
+class ExhaustiveSearchBacktracking(Search):
+    def search(self) -> Optional[int]:
+        best_action, _ = self.backtrack(
+            self.state, depth=0, current_cost=0.0, best_cost=float("inf")
+        )
+        return best_action
+
+    def backtrack(
+        self, state: State, depth: int, current_cost: float, best_cost: float
+    ) -> Tuple[Optional[int], float]:
+        """
+        Perform backtracking (DFS with pruning) to search for the best action.
+        Args:
+        - state: The current state.
+        - depth: The current depth of search.
+        - current_cost: The current accumulated cost.
+        - best_cost: The total cost found so far.
+
+        Returns:
+        - best_action: The best action found.
+        - best_cost: The total cost found.
+        """
+        if state.is_terminal():
+            return None, state.total_cost()
+
+        if depth >= self.max_depth:
+            return None, state.total_cost()
+
+        best_action = None
+        current_state = state.get_current_state()
+
+        for action in state.get_actions():
+            immediate_cost = state.get_cost(current_state, action)
+            new_current_cost = current_cost + immediate_cost
+            # pruning: no need to explore further
+            if new_current_cost >= best_cost:
+                continue
+
+            next_state = state.next_state(action)
+            _, future_cost = self.backtrack(
+                next_state, depth + 1, new_current_cost, best_cost
+            )
+            total_cost = immediate_cost + future_cost
+
+            if total_cost < best_cost:
+                best_cost = total_cost
+                best_action = action
+
+        return best_action, best_cost
 
 
 class OneStepLookaheadWithRollout(Search):

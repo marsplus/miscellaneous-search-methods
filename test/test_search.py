@@ -5,6 +5,7 @@ from itertools import permutations
 import pytest
 
 from app.search import (
+    ExhaustiveSearchBacktracking,
     ExhaustiveSearchDFS,
     MonteCarloTreeSearch,
     OneStepLookaheadWithRollout,
@@ -14,7 +15,7 @@ from app.search import (
 from app.tsp import TSPState
 
 N = 50000
-N_PROC = 10
+N_PROC = 20
 
 random.seed(12)
 
@@ -68,7 +69,6 @@ def run_search_method(search_method, initial_state, optimal_cost):
     """Run the search method for the TSP and verify the total cost matches the optimal cost."""
     search_method.num_sim = N
     search_method.num_processes = N_PROC
-    search_method.rollout_depth = 100
 
     current_state = initial_state
     while not current_state.is_terminal():
@@ -211,6 +211,18 @@ def test_dfs_search_ten_city(ten_city_distance_matrix):
 def test_dfs_search_small(small_distance_matrix):
     """Test Exhaustive DFS on a small distance matrix."""
     run_single_step_search_test(ExhaustiveSearchDFS, small_distance_matrix)
+
+
+# Test backtracking on a 10-city matrix
+def test_backtracking_search_ten_city(ten_city_distance_matrix):
+    """Test Exhaustive DFS on a 10-city distance matrix."""
+    run_single_step_search_test(ExhaustiveSearchBacktracking, ten_city_distance_matrix)
+
+
+# Test backtracking on a small matrix
+def test_backtracking_search_small(small_distance_matrix):
+    """Test Exhaustive DFS on a small distance matrix."""
+    run_single_step_search_test(ExhaustiveSearchBacktracking, small_distance_matrix)
 
 
 # Test terminal state handling
