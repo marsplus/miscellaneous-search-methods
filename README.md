@@ -6,7 +6,7 @@ Given a problem, the thinking process typically follows these steps:
 3. There are two ways to approximately solve the Bellman optimality equation:
     1. Approximate in the value space. 
     2. Approximate in the policy space. 
-4. All the search methods below approximate in the value space.
+4. All the search methods below approximate in the value space. We can think of them as approximate DP methods. 
 
 #### Heuristic Search
 - One-step lookahead with rollout
