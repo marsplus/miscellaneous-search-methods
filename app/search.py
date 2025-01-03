@@ -8,6 +8,9 @@ from typing import Callable, List, Optional, Tuple
 
 from app.states import State
 
+MAX_DEPTH = 99999
+ROLLOUT_DEPTH = 100
+
 
 def simulate_rollout(state: State, rollout_depth: int) -> float:
     """
@@ -44,16 +47,16 @@ class Search(ABC):
         state: State,
         num_sim: int = 100,
         num_processes: Optional[int] = None,
-        max_depth: int = 9999999,
-        rollout_depth: int = 9999999,
+        max_depth: int = MAX_DEPTH,
+        rollout_depth: int = ROLLOUT_DEPTH,
     ):
         """
         Initialize the search with a given state.
         Args:
-        - state: The initial state of the problem (any state that inherits from State).
+        - state: The initial state of the problem.
         - num_sim: the number of simulations to run
         - num_processes: #processes to run rollout
-        - max_depth: max steps to look ahead
+        - max_depth: max steps to search
         - rollout_depth: max depth to run rollout
         """
         self.state = state
@@ -98,6 +101,16 @@ class Search(ABC):
 
 
 class ExhaustiveSearchDFS(Search):
+    def __init__(
+        self,
+        state: State,
+        num_sim: int = 100,
+        num_processes: Optional[int] = None,
+        max_depth: int = MAX_DEPTH,
+        rollout_depth: int = ROLLOUT_DEPTH,
+    ):
+        super().__init__(state, num_sim, num_processes, max_depth, rollout_depth)
+
     def search(self) -> Optional[int]:
         best_action, _ = self.dfs(self.state, 0, float("inf"))
         return best_action
@@ -138,18 +151,28 @@ class ExhaustiveSearchDFS(Search):
         return best_action, min_cost
 
 
-class ExhaustiveSearchBacktracking(Search):
+class ExhaustiveSearchDFSPruning(Search):
+    def __init__(
+        self,
+        state: State,
+        num_sim: int = 100,
+        num_processes: Optional[int] = None,
+        max_depth: int = MAX_DEPTH,
+        rollout_depth: int = ROLLOUT_DEPTH,
+    ):
+        super().__init__(state, num_sim, num_processes, max_depth, rollout_depth)
+
     def search(self) -> Optional[int]:
-        best_action, _ = self.backtrack(
+        best_action, _ = self.dfs_pruning(
             self.state, depth=0, current_cost=0.0, best_cost=float("inf")
         )
         return best_action
 
-    def backtrack(
+    def dfs_pruning(
         self, state: State, depth: int, current_cost: float, best_cost: float
     ) -> Tuple[Optional[int], float]:
         """
-        Perform backtracking (DFS with pruning) to search for the best action.
+        Perform DFS with pruning to search for the best action.
         Args:
         - state: The current state.
         - depth: The current depth of search.
@@ -177,7 +200,7 @@ class ExhaustiveSearchBacktracking(Search):
                 continue
 
             next_state = state.next_state(action)
-            _, future_cost = self.backtrack(
+            _, future_cost = self.dfs_pruning(
                 next_state, depth + 1, new_current_cost, best_cost
             )
             total_cost = immediate_cost + future_cost
@@ -190,6 +213,20 @@ class ExhaustiveSearchBacktracking(Search):
 
 
 class OneStepLookaheadWithRollout(Search):
+    def __init__(
+        self,
+        state: State,
+        num_sim: int = 100,
+        num_processes: Optional[int] = None,
+        rollout_depth: int = ROLLOUT_DEPTH,
+    ):
+        super().__init__(
+            state=state,
+            num_sim=num_sim,
+            num_processes=num_processes,
+            rollout_depth=rollout_depth,
+        )
+
     def search(self) -> Optional[int]:
         best_action = None
         min_cost = float("inf")
@@ -197,6 +234,9 @@ class OneStepLookaheadWithRollout(Search):
         for action in self.state.get_actions():
             immediate_cost = self.state.get_cost(current_state, action)
             next_state = self.state.next_state(action)
+            # Use rollout to approximate the value function V(next_state)
+            # The following cost is accurate
+            # 1. The cost from current state -> next_state
             future_cost_estimate = self.rollout(next_state)
             total_cost = immediate_cost + future_cost_estimate
 
@@ -207,6 +247,20 @@ class OneStepLookaheadWithRollout(Search):
 
 
 class TwoStepLookaheadWithRollout(Search):
+    def __init__(
+        self,
+        state: State,
+        num_sim: int = 100,
+        num_processes: Optional[int] = None,
+        rollout_depth: int = ROLLOUT_DEPTH,
+    ):
+        super().__init__(
+            state=state,
+            num_sim=num_sim,
+            num_processes=num_processes,
+            rollout_depth=rollout_depth,
+        )
+
     def search(self) -> Optional[int]:
         best_action = None
         min_cost = float("inf")
@@ -219,14 +273,16 @@ class TwoStepLookaheadWithRollout(Search):
             for second_action in next_state.get_actions():
                 second_state_cost = next_state.get_cost(next_state, second_action)
                 next_next_state = next_state.next_state(second_action)
+                # Use rollout to approximate the value function
+                # The following costs are accurate:
+                # 1. The cost from current state -> next_state
+                # 2. The cost from next_state -> next_next_state
                 future_cost_estimate = self.rollout(next_next_state)
-                total_future_cost = second_state_cost + future_cost_estimate
+                cost_from_second_step = second_state_cost + future_cost_estimate
 
-                if total_future_cost < second_min_cost:
-                    second_min_cost = total_future_cost
+                if cost_from_second_step < second_min_cost:
+                    second_min_cost = cost_from_second_step
 
-            if second_min_cost == float("inf"):
-                second_min_cost = 0.0
             total_cost = immediate_cost + second_min_cost
 
             if total_cost < min_cost:
@@ -240,20 +296,19 @@ class SelectiveDepthLookaheadWithRollout(Search):
         self,
         state: State,
         num_sim: int = 100,
-        max_depth: int = 1,
-        should_expand_fn: Optional[Callable[[State, int], bool]] = None,
         num_processes: Optional[int] = None,
+        rollout_depth: int = ROLLOUT_DEPTH,
+        look_ahead_depth: int = 3,
+        should_expand_fn: Optional[Callable[[State, int], bool]] = None,
     ):
-        """
-        Initialize the selective depth lookahead with rollout.
-        Args:
-        - state: The initial state of the problem.
-        - num_sim: The number of simulations to run in the rollout.
-        - max_depth: The maximum depth to look ahead.
-        - should_expand_fn: Optional function to determine whether to expand a node.
-        """
-        super().__init__(state, num_sim, num_processes, max_depth)
+        super().__init__(
+            state=state,
+            num_sim=num_sim,
+            num_processes=num_processes,
+            rollout_depth=rollout_depth,
+        )
         self.should_expand_fn = should_expand_fn
+        self.look_ahead_depth = look_ahead_depth
 
     def search(self) -> Optional[int]:
         """
@@ -277,7 +332,7 @@ class SelectiveDepthLookaheadWithRollout(Search):
         if state.is_terminal():
             return None, state.total_cost()
 
-        if depth >= self.max_depth:
+        if depth >= self.look_ahead_depth:
             est_cost = self.rollout(state)
             return None, est_cost
 
