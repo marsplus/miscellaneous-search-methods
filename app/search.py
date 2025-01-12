@@ -23,7 +23,6 @@ def simulate_rollout(state: State, rollout_depth: int) -> float:
     Returns:
     - total_cost: The total cost accumulated during the simulation.
     """
-    # random.seed()
     current_state = state
     depth = 0
     while not current_state.is_terminal() and depth < rollout_depth:
@@ -164,12 +163,12 @@ class ExhaustiveSearchDFSPruning(Search):
 
     def search(self) -> Optional[int]:
         best_action, _ = self.dfs_pruning(
-            self.state, depth=0, current_cost=0.0, best_cost=float("inf")
+            self.state, depth=0, current_cost=0.0, min_cost=float("inf")
         )
         return best_action
 
     def dfs_pruning(
-        self, state: State, depth: int, current_cost: float, best_cost: float
+        self, state: State, depth: int, current_cost: float, min_cost: float
     ) -> Tuple[Optional[int], float]:
         """
         Perform DFS with pruning to search for the best action.
@@ -177,11 +176,11 @@ class ExhaustiveSearchDFSPruning(Search):
         - state: The current state.
         - depth: The current depth of search.
         - current_cost: The current accumulated cost.
-        - best_cost: The total cost found so far.
+        - min_cost: The total cost found so far.
 
         Returns:
         - best_action: The best action found.
-        - best_cost: The total cost found.
+        - min_cost: The total cost found.
         """
         if state.is_terminal():
             return None, state.total_cost()
@@ -196,16 +195,16 @@ class ExhaustiveSearchDFSPruning(Search):
             immediate_cost = state.get_cost(current_state, action)
             new_current_cost = current_cost + immediate_cost
             # pruning: no need to explore further
-            if new_current_cost >= best_cost:
+            if new_current_cost >= min_cost:
                 continue
 
             next_state = state.next_state(action)
             _, future_cost = self.dfs_pruning(
-                next_state, depth + 1, new_current_cost, best_cost
+                next_state, depth + 1, new_current_cost, min_cost
             )
             total_cost = immediate_cost + future_cost
 
-            if total_cost < best_cost:
+            if total_cost < min_cost:
                 best_cost = total_cost
                 best_action = action
 
@@ -235,8 +234,7 @@ class OneStepLookaheadWithRollout(Search):
             immediate_cost = self.state.get_cost(current_state, action)
             next_state = self.state.next_state(action)
             # Use rollout to approximate the value function V(next_state)
-            # The following cost is accurate
-            # 1. The cost from current state -> next_state
+            # Such that V(current_state) = min_{action} immediate_cost(current_state, action) + V( transition(current_state, action) )
             future_cost_estimate = self.rollout(next_state)
             total_cost = immediate_cost + future_cost_estimate
 
@@ -405,7 +403,7 @@ class MonteCarloTreeSearch(Search):
         root = MCTSNode(state=self.state)
         for _ in range(self.num_sim):
             node = self.tree_policy(root)
-            reward = self.base_policy(node)
+            reward = self.get_reward(node)
             self.backpropagate(node, reward)
         best_child = root.best_child(c_param=0)
         return best_child.action
@@ -418,11 +416,12 @@ class MonteCarloTreeSearch(Search):
                 node = node.best_child()
         return node
 
-    def base_policy(self, node: MCTSNode) -> float:
+    def get_reward(self, node: MCTSNode) -> float:
         current_state = node.state
         while not current_state.is_terminal():
             actions = current_state.get_actions()
-            assert actions
+            if not actions:
+                break
             action = self.rollout_policy(actions)
             current_state = current_state.next_state(action)
         return 1.0 / current_state.total_cost()
